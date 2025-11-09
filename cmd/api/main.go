@@ -14,6 +14,11 @@ func main() {
 		dbPath = "budget-data/budget.db"
 		log.Printf("DB_PATH не задан - используем значение по умолчанию: %s", dbPath)
 	}
+
+	dataDir := filepath.Dir(dbPath)
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		log.Fatalf("Не удалось создать директорию %s: %v", dataDir, err)
+	}
 }
 
 // пока все пишу тут, потом надо разделить файлы и кинут в internal
