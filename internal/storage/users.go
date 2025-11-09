@@ -62,3 +62,12 @@ func (s *Storage) UpdatePassword(id int64, newPassword string) error {
 		`, newPassword, time.Now(), id)
 	return err
 }
+
+func (s *Storage) UpdateUserName(id int64, newName string) error {
+	_, err := s.db.Exec(`
+		UPDATE users 
+		SET name = ?, updated_at = ?
+		WHERE id = ?
+		`, newName, time.Now(), id)
+	return err
+}
