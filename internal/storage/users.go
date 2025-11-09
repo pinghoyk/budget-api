@@ -53,3 +53,12 @@ func (s *Storage) DeleteUser(id int64) error {
 		DELETE FROM users WHERE id = ?`, id)
 		return err
 }
+
+func (s *Storage) UpdatePassword(id int64, newPassword string) error {
+	_, err := s.db.Exec(`
+		UPDATE users
+		SET password = ?, updated_at = ?
+		WHERE id = ?
+		`, newPassword, time.Now(), id)
+	return err
+}
