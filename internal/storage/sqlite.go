@@ -25,3 +25,17 @@ func NewDB(path string) (*sql.DB, error) {
 
 	return db, nil
 }
+
+func initSchema(db *sql.DB) error {
+	sql, err := schemaFS.ReadFile("schema.sql")
+	if err != nil {
+		return fmt.Errorf("Не удалось прочитать schema.sql: %w", err)
+	}
+
+	_, err = db.Exec(string(sql))
+	if err != nil {
+		return fmt.Errorf("Ошибка выполнения схемы: %w", err)
+	}
+
+	return nil
+}
