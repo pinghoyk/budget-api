@@ -17,3 +17,11 @@ func NewDB(path string) (*sql.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Не удалось открыть БД %q: %w", path, err)
 	}
+
+	if err := db.Ping(); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("Не удалось применить схему: %w", err)
+	}
+
+	return db, nil
+}
