@@ -16,7 +16,7 @@ func main() {
 
 	dbPath := os.Getenv("DB_PATH")
 	if dbPath == "" {
-		dbPath = "budget-data/budget.db"
+		dbPath = "../budget-data/budget.db"
 		log.Printf("DB_PATH не задан - используем значение по умолчанию: %s", dbPath)
 	}
 
