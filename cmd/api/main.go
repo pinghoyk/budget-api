@@ -36,6 +36,25 @@ func main() {
 	log.Printf("База данных создана :%s", dbPath)
 	log.Println("Запустили сервер")
 
+	store := storage.New(db)
+
+	// get
+	http.HandleFunc("/users", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "только GET", http.StatusMethodNotAllowed)
+			return
+		}
+
+		users, err := store.GetAllUsers()
+		if err != nil {
+			log.Printf("Ошибка получения юзеров: %v", err)
+			http.Error(w, "внутренняя ошибка", http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(users)
+	})
 }
 
 // пока все пишу тут, потом надо разделить файлы и кинут в internal
