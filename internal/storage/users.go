@@ -24,3 +24,18 @@ func (s *Storage) GetAllUsers() ([]*User, error) {
 	return users, rows.Err()
 
 }
+
+func (s *Storage) GetUserByID(id int64) (*User, error) {
+	var u User
+	err := s.db.QueryRow(`
+		SELECT id, email, password, name, created_at, updated_at
+		FROM users WHERE id = ? 
+		`, id).Scan(&u.ID, &u.Email, &u.Password, &u.Name, &u.CreatedAt, &u.UpdatedAt)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+	}
+	return &u, nil
+}
