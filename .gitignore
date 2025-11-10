@@ -11,3 +11,4 @@ bin/
 # IDE
 .vscode
 
+/data
