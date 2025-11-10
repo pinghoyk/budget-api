@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"log"
 	"net/http"
 	"os"
@@ -9,14 +8,26 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/go-chi/cors"
 	"github.com/joho/godotenv"
+	"github.com/pinghoyk/budget-api/internal/auth"
+	"github.com/pinghoyk/budget-api/internal/handlers"
 	"github.com/pinghoyk/budget-api/internal/storage"
 )
 
 func main() {
 	if err := godotenv.Load(); err != nil {
 		log.Println("Файл .env не найден!")
+	}
+
+	// Validate required environment variables
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		log.Fatal("JWT_SECRET не установлен в переменных окружения")
+	}
+
+	botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
+	if botToken == "" {
+		log.Fatal("TELEGRAM_BOT_TOKEN не установлен в переменных окружения")
 	}
 
 	dbPath := os.Getenv("DB_PATH")
@@ -40,69 +51,90 @@ func main() {
 
 	store := storage.New(db)
 
+	// Initialize handlers
+	authHandler := handlers.NewAuthHandler(store)
+	accountHandler := handlers.NewAccountHandler(store)
+	categoryHandler := handlers.NewCategoryHandler(store)
+	transactionHandler := handlers.NewTransactionHandler(store)
+	budgetHandler := handlers.NewBudgetHandler(store)
+	statsHandler := handlers.NewStatsHandler(store)
+
 	r := chi.NewRouter()
 
 	// Middleware
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	r.Use(middleware.RequestID)
+	r.Use(middleware.RealIP)
 
-	// Routes
-	r.Get("/users", getUsersHandler(store))
-	r.Post("/add_user", addUserHandler(store))
+	// Public routes
+	r.Route("/api", func(r chi.Router) {
+		// Health check
+		r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("OK"))
+		})
 
-	// Запуск сервера
-	log.Println("Сервер слушает :8080")
-	log.Fatal(http.ListenAndServe(":8080", r))
-}
+		// Authentication routes (public)
+		r.Post("/auth/telegram", authHandler.TelegramLogin)
 
-// === HANDLERS ===
+		// Protected routes
+		r.Group(func(r chi.Router) {
+			r.Use(auth.Middleware(jwtSecret))
 
-func getUsersHandler(store *storage.Storage) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		users, err := store.GetAllUsers()
-		if err != nil {
-			log.Printf("Ошибка получения юзеров: %v", err)
-			http.Error(w, "внутренняя ошибка", http.StatusInternalServerError)
-			return
-		}
+			// Current user
+			r.Get("/auth/me", authHandler.GetCurrentUser)
 
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(users); err != nil {
-			log.Printf("Ошибка сериализации JSON: %v", err)
-			http.Error(w, "ошибка при кодировании", http.StatusInternalServerError)
-			return
-		}
+			// Accounts
+			r.Route("/accounts", func(r chi.Router) {
+				r.Get("/", accountHandler.GetAccounts)
+				r.Post("/", accountHandler.CreateAccount)
+				r.Get("/{id}", accountHandler.GetAccount)
+				r.Put("/{id}", accountHandler.UpdateAccount)
+				r.Delete("/{id}", accountHandler.DeleteAccount)
+			})
+
+			// Categories
+			r.Route("/categories", func(r chi.Router) {
+				r.Get("/", categoryHandler.GetCategories)
+				r.Post("/", categoryHandler.CreateCategory)
+				r.Get("/{id}", categoryHandler.GetCategory)
+				r.Put("/{id}", categoryHandler.UpdateCategory)
+				r.Delete("/{id}", categoryHandler.DeleteCategory)
+			})
+
+			// Transactions
+			r.Route("/transactions", func(r chi.Router) {
+				r.Get("/", transactionHandler.GetTransactions)
+				r.Post("/", transactionHandler.CreateTransaction)
+				r.Get("/{id}", transactionHandler.GetTransaction)
+				r.Put("/{id}", transactionHandler.UpdateTransaction)
+				r.Delete("/{id}", transactionHandler.DeleteTransaction)
+			})
+
+			// Budgets
+			r.Route("/budgets", func(r chi.Router) {
+				r.Get("/", budgetHandler.GetBudgets)
+				r.Post("/", budgetHandler.CreateBudget)
+				r.Get("/{id}", budgetHandler.GetBudget)
+				r.Get("/{id}/status", budgetHandler.GetBudgetStatus)
+				r.Put("/{id}", budgetHandler.UpdateBudget)
+				r.Delete("/{id}", budgetHandler.DeleteBudget)
+			})
+
+			// Statistics
+			r.Route("/stats", func(r chi.Router) {
+				r.Get("/category-summary", statsHandler.GetCategorySummary)
+				r.Get("/monthly-balance", statsHandler.GetMonthlyBalance)
+			})
+		})
+	})
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
 	}
-}
 
-func addUserHandler(store *storage.Storage) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var input struct {
-			Email    string `json:"email"`
-			Password string `json:"password"`
-			Name     string `json:"name"`
-		}
-
-		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-			http.Error(w, "невалидный JSON", http.StatusBadRequest)
-			return
-		}
-		defer r.Body.Close()
-
-		if input.Email == "" || input.Password == "" || input.Name == "" {
-			http.Error(w, "email, password, name обязательны", http.StatusBadRequest)
-			return
-		}
-
-		err := store.AddUser(input.Email, input.Password, input.Name)
-		if err != nil {
-			log.Printf("Не удалось добавить юзера: %v", err)
-			http.Error(w, "не удалось создать юзера", http.StatusBadRequest)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
-	}
+	log.Printf("Сервер слушает :%s", port)
+	log.Fatal(http.ListenAndServe(":"+port, r))
 }
