@@ -6,10 +6,12 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
+	"errors"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/go-chi/cors"
 	"github.com/joho/godotenv"
 	"github.com/pinghoyk/budget-api/internal/storage"
 )
@@ -48,7 +50,9 @@ func main() {
 
 	// Routes
 	r.Get("/users", getUsersHandler(store))
-	r.Post("/add_user", addUserHandler(store))
+	r.Post("/users", addUserHandler(store))
+	r.Delete("/users/{id}", deleteUserHandler(store))
+	r.Get("/users/{id}", getUserHandler(store))
 
 	// Запуск сервера
 	log.Println("Сервер слушает :8080")
@@ -104,5 +108,80 @@ func addUserHandler(store *storage.Storage) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	}
+}
+
+func deleteUserHandler(store *storage.Storage) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userIDStr := chi.URLParam(r, "id")
+		if userIDStr == "" {
+			http.Error(w, "ID пользователя обязателен", http.StatusBadRequest)
+			return
+		}
+
+		userID, err := strconv.ParseInt(userIDStr, 10, 64)
+		if err != nil {
+			http.Error(w, "ID должен быть целым числом", http.StatusBadRequest)
+			return
+		}
+
+		if userID <= 0 {
+			http.Error(w, "ID должен быть положительным", http.StatusBadRequest)
+			return
+		}
+
+		err = store.DeleteUser(userID)
+		if err != nil {
+			if errors.Is(err, storage.ErrUserNotFound) {
+				http.Error(w, "пользователь не найден", http.StatusNotFound)
+				return
+			}
+			log.Printf("Ошибка удаления пользователя (ID=%d): %v", userID, err)
+			http.Error(w, "внутренняя ошибка", http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	}
+}
+
+func getUserHandler(store *storage.Storage) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userIDStr := chi.URLParam(r, "id")
+		if userIDStr == "" {
+			http.Error(w, "ID пользователя обязателен", http.StatusBadRequest)
+			return
+		}
+
+		userID, err := strconv.ParseInt(userIDStr, 10, 64)
+		if err != nil {
+			http.Error(w, "ID должен быть целым числом", http.StatusBadRequest)
+			return
+		}
+
+		if userID <= 0 {
+			http.Error(w, "ID должен быть положительным", http.StatusBadRequest)
+			return
+		}
+
+		user, err := store.GetUserByID(userID)
+		if err != nil {
+			if errors.Is(err, storage.ErrUserNotFound) {
+				http.Error(w, "пользователь не найден", http.StatusNotFound)
+				return
+			}
+			log.Printf("Ошибка получения пользователя (ID=%d): %v", userID, err)
+			http.Error(w, "внутренняя ошибка", http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(user); err != nil {
+			log.Printf("Ошибка сериализации JSON для пользователя (ID=%d): %v", userID, err)
+			http.Error(w, "ошибка при кодировании", http.StatusInternalServerError)
+			return
+		}
 	}
 }
