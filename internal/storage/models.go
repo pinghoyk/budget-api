@@ -45,4 +45,18 @@ type Transfer struct {
 	Description   *string         `db:"description" json:"description,omitempty"`
 	CreatedAt     time.Time       `db:"created_at" json:"created_at"`
 }
+
+type Transaction struct {
+	ID              int64           `db:"id" json:"id"`
+	UserID          int64           `db:"user_id" json:"user_id"`
+	AccountID       int64           `db:"account_id" json:"account_id"`
+	CategoryID      *int64          `db:"category_id" json:"category_id,omitempty"`
+	Amount          decimal.Decimal `db:"amount" json:"amount"`
+	Type            string          `db:"type" json:"type"`
+	Description     *string         `db:"description" json:"description,omitempty"`
+	TransferID      *int64          `db:"transfer_id" json:"transfer_id,omitempty"`
+	TransactionDate time.Time       `db:"transaction_date" json:"transaction_date"`
+	CreatedAt       time.Time       `db:"created_at" json:"created_at"`
+	UpdatedAt       time.Time       `db:"updated_at" json:"updated_at"`
+}
 }

@@ -50,4 +50,23 @@ CREATE TABLE IF NOT EXISTS transfers (
     FOREIGN KEY (to_account_id) REFERENCES accounts(id) ON DELETE RESTRICT,
     CHECK (from_account_id != to_account_id)
 );
+
+-- Таблица транзакций
+CREATE TABLE IF NOT EXISTS transactions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    account_id INTEGER NOT NULL,
+    category_id INTEGER, -- NULL для переводов
+    amount TEXT NOT NULL CHECK(amount > 0),
+    type TEXT NOT NULL CHECK(type IN ('income', 'expense')),
+    description TEXT,
+    transfer_id INTEGER, -- ссылка на transfers.id (если это часть перевода)
+    transaction_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE RESTRICT,
+    FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL,
+    FOREIGN KEY (transfer_id) REFERENCES transfers(id) ON DELETE CASCADE
+);
 );
